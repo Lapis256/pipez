@@ -8,14 +8,13 @@ import de.maxhenkel.pipez.blocks.ModBlocks;
 import de.maxhenkel.pipez.blocks.tileentity.PipeLogicTileEntity;
 import de.maxhenkel.pipez.blocks.tileentity.PipeTileEntity;
 import de.maxhenkel.pipez.blocks.tileentity.UpgradeTileEntity;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidUtil;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
@@ -35,8 +34,8 @@ public class FluidPipeType extends PipeType<Fluid> {
     }
 
     @Override
-    public boolean canInsert(BlockEntity tileEntity, Direction direction) {
-        return tileEntity.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, direction).isPresent();
+    public Capability<?> getCapability() {
+        return CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY;
     }
 
     @Override
@@ -68,7 +67,11 @@ public class FluidPipeType extends PipeType<Fluid> {
             if (!tileEntity.shouldWork(side, this)) {
                 continue;
             }
-            IFluidHandler fluidHandler = getFluidHandler(tileEntity, tileEntity.getBlockPos().relative(side), side.getOpposite());
+            PipeTileEntity.Connection extractingConnection = tileEntity.getExtractingConnection(side);
+            if (extractingConnection == null) {
+                continue;
+            }
+            IFluidHandler fluidHandler = extractingConnection.getFluidHandler(tileEntity.getLevel()).orElse(null);
             if (fluidHandler == null) {
                 continue;
             }
@@ -93,7 +96,7 @@ public class FluidPipeType extends PipeType<Fluid> {
         int p = tileEntity.getRoundRobinIndex(side, this) % connections.size();
         while (mbToTransfer > 0 && hasNotInserted(connectionsFull)) {
             PipeTileEntity.Connection connection = connections.get(p);
-            IFluidHandler destination = getFluidHandler(tileEntity, connection.getPos(), connection.getDirection());
+            IFluidHandler destination = connection.getFluidHandler(tileEntity.getLevel()).orElse(null);
             boolean hasInserted = false;
             if (destination != null && !connectionsFull[p]) {
                 for (int j = 0; j < fluidHandler.getTanks(); j++) {
@@ -127,7 +130,7 @@ public class FluidPipeType extends PipeType<Fluid> {
 
         connectionLoop:
         for (PipeTileEntity.Connection connection : connections) {
-            IFluidHandler destination = getFluidHandler(tileEntity, connection.getPos(), connection.getDirection());
+            IFluidHandler destination = connection.getFluidHandler(tileEntity.getLevel()).orElse(null);
             if (destination == null) {
                 continue;
             }
@@ -198,15 +201,6 @@ public class FluidPipeType extends PipeType<Fluid> {
             }
         }
         return false;
-    }
-
-    @Nullable
-    private IFluidHandler getFluidHandler(PipeLogicTileEntity tileEntity, BlockPos pos, Direction direction) {
-        BlockEntity te = tileEntity.getLevel().getBlockEntity(pos);
-        if (te == null) {
-            return null;
-        }
-        return te.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, direction).orElse(null);
     }
 
     @Override

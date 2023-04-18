@@ -9,15 +9,14 @@ import de.maxhenkel.pipez.blocks.ModBlocks;
 import de.maxhenkel.pipez.blocks.tileentity.PipeLogicTileEntity;
 import de.maxhenkel.pipez.blocks.tileentity.PipeTileEntity;
 import de.maxhenkel.pipez.blocks.tileentity.UpgradeTileEntity;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.items.CapabilityItemHandler;
+import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
@@ -36,8 +35,8 @@ public class ItemPipeType extends PipeType<Item> {
     }
 
     @Override
-    public boolean canInsert(BlockEntity tileEntity, Direction direction) {
-        return tileEntity.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, direction).isPresent();
+    public Capability<?> getCapability() {
+        return CapabilityItemHandler.ITEM_HANDLER_CAPABILITY;
     }
 
     @Override
@@ -77,7 +76,11 @@ public class ItemPipeType extends PipeType<Item> {
             if (!tileEntity.shouldWork(side, this)) {
                 continue;
             }
-            IItemHandler itemHandler = getItemHandler(tileEntity, tileEntity.getBlockPos().relative(side), side.getOpposite());
+            PipeTileEntity.Connection extractingConnection = tileEntity.getExtractingConnection(side);
+            if (extractingConnection == null) {
+                continue;
+            }
+            IItemHandler itemHandler = extractingConnection.getItemHandler(tileEntity.getLevel()).orElse(null);
             if (itemHandler == null) {
                 continue;
             }
@@ -101,7 +104,7 @@ public class ItemPipeType extends PipeType<Item> {
         int p = tileEntity.getRoundRobinIndex(side, this) % connections.size();
         while (itemsToTransfer > 0 && hasNotInserted(inventoriesFull)) {
             PipeTileEntity.Connection connection = connections.get(p);
-            IItemHandler destination = getItemHandler(tileEntity, connection.getPos(), connection.getDirection());
+            IItemHandler destination = connection.getItemHandler(tileEntity.getLevel()).orElse(null);
             boolean hasInserted = false;
             if (destination != null && !inventoriesFull[p] && !isFull(destination)) {
                 for (int j = 0; j < itemHandler.getSlots(); j++) {
@@ -139,7 +142,7 @@ public class ItemPipeType extends PipeType<Item> {
         connectionLoop:
         for (PipeTileEntity.Connection connection : connections) {
             nonFittingItems.clear();
-            IItemHandler destination = getItemHandler(tileEntity, connection.getPos(), connection.getDirection());
+            IItemHandler destination = connection.getItemHandler(tileEntity.getLevel()).orElse(null);
             if (destination == null) {
                 continue;
             }
@@ -229,15 +232,6 @@ public class ItemPipeType extends PipeType<Item> {
             }
         }
         return false;
-    }
-
-    @Nullable
-    private IItemHandler getItemHandler(PipeLogicTileEntity tileEntity, BlockPos pos, Direction direction) {
-        BlockEntity te = tileEntity.getLevel().getBlockEntity(pos);
-        if (te == null) {
-            return null;
-        }
-        return te.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, direction).orElse(null);
     }
 
     public int getSpeed(PipeLogicTileEntity tileEntity, Direction direction) {
